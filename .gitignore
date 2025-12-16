@@ -9,8 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
-# Test cache
+# Test artifacts
 .pytest_cache/
+*.db
 
 # Secrets
 .env 
