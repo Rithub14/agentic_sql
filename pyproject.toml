@@ -1,0 +1,37 @@
+[project]
+name = "agentic-sql"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Rizwan Aslam", email = "letsmailriz@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.124.4",
+    "langchain>=1.2.0",
+    "langgraph>=1.0.5",
+    "pandas>=2.3.3",
+    "plotly>=6.5.0",
+    "psycopg2-binary>=2.9.11",
+    "pydantic>=2.12.5",
+    "pymysql>=1.1.2",
+    "python-dotenv>=1.2.1",
+    "sqlalchemy>=2.0.45",
+    "uvicorn[standard]>=0.38.0",
+]
+
+[project.scripts]
+agentic-sql = "agentic_sql:main"
+
+[build-system]
+requires = ["uv_build>=0.9.11,<0.10.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "black>=25.12.0",
+    "httpx>=0.28.1",
+    "pytest>=9.0.2",
+    "ruff>=0.14.9",
+]
