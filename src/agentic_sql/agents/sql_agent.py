@@ -1,3 +1,5 @@
+import re
+
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_openai import ChatOpenAI
@@ -40,11 +42,23 @@ class SQLAgent:
 
         self.chain = self.prompt | self.llm | StrOutputParser()
 
+    @staticmethod
+    def _strip_code_fences(text: str) -> str:
+        """
+        Remove Markdown code fences so downstream validators/executors
+        receive plain SQL.
+        """
+        match = re.search(r"```(?:sql)?\s*(.*?)\s*```", text, re.DOTALL | re.IGNORECASE)
+        if match:
+            return match.group(1)
+        return text
+
     def run(self, question: str, schema: dict) -> str:
-        sql = self.chain.invoke(
+        raw_sql = self.chain.invoke(
             {
                 "question": question,
                 "schema": schema,
             }
         )
+        sql = self._strip_code_fences(raw_sql)
         return sql.strip()
