@@ -1,5 +1,3 @@
-# tests/test_visualization_agent.py
-
 from agentic_sql.agents.visualization_agent import VisualizationAgent
 
 
