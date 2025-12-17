@@ -8,6 +8,7 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "cryptography>=46.0.3",
     "fastapi>=0.124.4",
     "langchain>=1.2.0",
     "langchain-community>=0.4.1",
@@ -21,7 +22,9 @@ dependencies = [
     "pymysql>=1.1.2",
     "pytest>=9.0.2",
     "python-dotenv>=1.2.1",
+    "requests>=2.32.5",
     "sqlalchemy>=2.0.45",
+    "streamlit>=1.52.1",
     "uvicorn[standard]>=0.38.0",
 ]
 
