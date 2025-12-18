@@ -1,5 +1,3 @@
-# src/agentic_sql/agents/coordinator.py
-
 from typing import TypedDict, Dict, Any, Optional
 
 from langgraph.graph import StateGraph, END
@@ -12,10 +10,6 @@ from agentic_sql.agents.visualization_agent import VisualizationAgent
 from agentic_sql.db.engine import get_engine
 
 
-# -------------------------
-# State definition
-# -------------------------
-
 class AgentState(TypedDict):
     question: str
     schema: Dict[str, Any]
@@ -26,17 +20,14 @@ class AgentState(TypedDict):
     user_requested_chart: Optional[str]
 
 
-# -------------------------
-# Coordinator
-# -------------------------
-
 class CoordinatorAgent:
     """
-    LangGraph-based coordinator that orchestrates all agents.
+    LangGraph-based coordinator.
+    A NEW instance is created per request with a user-selected database.
     """
 
-    def __init__(self):
-        engine = get_engine()
+    def __init__(self, database_url: Optional[str] = None):
+        engine = get_engine(database_url)
 
         self.schema_agent = SchemaAgent(engine)
         self.sql_agent = SQLAgent()
@@ -108,6 +99,7 @@ class CoordinatorAgent:
         question: str,
         user_requested_chart: Optional[str] = None,
     ) -> Dict[str, Any]:
+
         initial_state: AgentState = {
             "question": question,
             "schema": {},
@@ -121,7 +113,7 @@ class CoordinatorAgent:
         final_state = self.graph.invoke(initial_state)
 
         return {
+            "sql": final_state["validated_sql"],
             "results": final_state["results"],
             "visualization": final_state["visualization"],
-            "sql": final_state["validated_sql"],
         }
