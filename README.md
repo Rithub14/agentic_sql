@@ -3,13 +3,13 @@ Agentic SQL Explorer
 
 Natural‑language to SQL with optional visualization. FastAPI backend orchestrates schema inspection, SQL generation/validation, execution, and viz suggestion; Streamlit frontend lets non‑technical users connect a database, ask questions, test connectivity, and view results.
 
-Key features
+## Key features
 - Structured DB connection form (Postgres/MySQL/SQLite), no raw URLs required; built‑in “Test connection”.
 - Requires OpenAI for SQL generation; set `OPENAI_API_KEY`.
 - LangGraph‑based coordinator: schema agent → SQL agent → validation → execution → visualization agent.
 - Docker Compose for one‑shot startup (API + frontend + Postgres).
 
-Quick start (Docker)
+## Quick start (Docker)
 1) Copy env and adjust as needed:
    ```bash
    cp .env.template .env
@@ -37,7 +37,7 @@ Quick start (Docker)
    - Database: `postgres`
    - Question example: “List all album titles and their artist names.”
 
-Local (without Docker)
+## Local (without Docker)
 1) Create a venv and install deps (uv preferred):
    ```bash
    uv sync
@@ -54,19 +54,17 @@ Local (without Docker)
    ```
 5) Open http://localhost:8501 and fill the form with your DB credentials/host. Use “Test connection” before running queries.
 
-Environment
+## Environment
 - `.env.template` documents required vars: `DATABASE_URL`, `API_BASE_URL`, `OPENAI_API_KEY`, and Postgres container creds. Copy to `.env` and fill real values.
 
-Testing
+## Testing
 ```bash
 pytest
 ```
 
-Project structure
+## Project structure
 - `src/agentic_sql`: FastAPI app and agents (schema, SQL, validation, execution, visualization).
 - `frontend/`: Streamlit UI.
 - `docker-compose.yml`: API + frontend + Postgres.
 - `.env.template`: sample configuration.
 
-Notes
-- For host databases, use `host.docker.internal` (macOS/Windows) or the host IP when connecting from Docker.
