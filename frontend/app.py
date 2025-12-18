@@ -6,8 +6,9 @@ import plotly.express as px
 import requests
 import streamlit as st
 
-API_QUERY_URL = "http://127.0.0.1:8000/api/query"
-API_TEST_URL = "http://127.0.0.1:8000/api/test-connection"
+API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
+API_QUERY_URL = f"{API_BASE_URL}/api/query"
+API_TEST_URL = f"{API_BASE_URL}/api/test-connection"
 
 st.set_page_config(page_title="Agentic SQL Explorer", layout="wide")
 
@@ -47,29 +48,32 @@ if "force_render_chart" not in st.session_state:
 question = st.text_input(
     "Ask a question about your database",
     placeholder="e.g. Show total sales per country",
+    key="question_input",
 )
 
 db_type = st.selectbox(
     "Database type",
     options=["postgresql", "mysql", "sqlite"],
+    key="db_type",
 )
 
 col1, col2 = st.columns(2)
 with col1:
-    host = st.text_input("Host", value="localhost" if db_type != "sqlite" else "")
+    host = st.text_input("Host", value="localhost" if db_type != "sqlite" else "", key="db_host")
 with col2:
-    port = st.text_input("Port", value="5432" if db_type == "postgresql" else "3306" if db_type == "mysql" else "")
+    port = st.text_input("Port", value="5432" if db_type == "postgresql" else "3306" if db_type == "mysql" else "", key="db_port")
 
 col3, col4 = st.columns(2)
 with col3:
-    username = st.text_input("Username", value="")
+    username = st.text_input("Username", value="", key="db_user")
 with col4:
-    password = st.text_input("Password", type="password", value="")
+    password = st.text_input("Password", type="password", value="", key="db_password")
 
 database = st.text_input(
     "Database name (or SQLite file path)",
     value="",
     placeholder="sampledb or /path/to/file.db",
+    key="db_name",
 )
 
 db_url = assemble_url(db_type, host, port, username, password, database)
@@ -77,10 +81,11 @@ db_url = assemble_url(db_type, host, port, username, password, database)
 chart_type = st.selectbox(
     "Optional: Choose a visualization",
     options=["None", "bar", "line", "pie"],
+    key="chart_type",
 )
 
-test_clicked = st.button("Test connection")
-submit = st.button("Run Query", disabled=not question or not db_url)
+test_clicked = st.button("Test connection", key="test_connection")
+submit = st.button("Run Query", key="run_query", disabled=not question or not db_url)
 
 # -----------------------
 # API Call (ONLY HERE)
