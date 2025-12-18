@@ -5,6 +5,9 @@ from agentic_sql.agents.validation_agent import ValidationAgent, SQLValidationEr
 from agentic_sql.execution.sql_executor import SQLExecutor
 
 
+TEST_DB_URL = "sqlite:///./test.db"
+
+
 def test_validation_blocks_destructive_sql():
     agent = ValidationAgent()
 
@@ -22,7 +25,7 @@ def test_validation_adds_limit():
 
 
 def test_sql_execution():
-    engine = get_engine()
+    engine = get_engine(TEST_DB_URL)
 
     with engine.begin() as conn:
         conn.execute(
@@ -35,7 +38,11 @@ def test_sql_execution():
                 """
             )
         )
-        conn.execute(text("INSERT INTO users (name) VALUES ('Alice'), ('Bob')"))
+        conn.execute(
+            text(
+                "INSERT INTO users (name) VALUES ('Alice'), ('Bob')"
+            )
+        )
 
     validator = ValidationAgent(default_limit=5)
     executor = SQLExecutor(engine)
