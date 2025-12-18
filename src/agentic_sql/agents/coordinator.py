@@ -26,11 +26,11 @@ class CoordinatorAgent:
     A NEW instance is created per request with a user-selected database.
     """
 
-    def __init__(self, database_url: Optional[str] = None):
+    def __init__(self, database_url: Optional[str] = None, sql_agent: Optional[SQLAgent] = None):
         engine = get_engine(database_url)
 
         self.schema_agent = SchemaAgent(engine)
-        self.sql_agent = SQLAgent()
+        self.sql_agent = sql_agent or SQLAgent()
         self.validation_agent = ValidationAgent()
         self.executor = SQLExecutor(engine)
         self.visualization_agent = VisualizationAgent()

@@ -1,6 +1,6 @@
 import os
 import re
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -42,24 +42,22 @@ class SQLAgent:
         self,
         model: str = "gpt-4o-mini",
         temperature: float = 0.0,
-        use_mock_if_no_api_key: bool = True,
+        llm: Optional[Any] = None,
     ):
-        self.use_mock = use_mock_if_no_api_key and not os.getenv("OPENAI_API_KEY")
+        api_key_present = bool(os.getenv("OPENAI_API_KEY"))
+        if llm is None and not api_key_present:
+            raise ValueError("OPENAI_API_KEY is required for SQL generation.")
 
-        if not self.use_mock:
-            self.llm = ChatOpenAI(model=model, temperature=temperature)
+        self.llm = llm or ChatOpenAI(model=model, temperature=temperature)
 
-            self.prompt = ChatPromptTemplate.from_messages(
-                [
-                    ("system", SYSTEM_PROMPT),
-                    ("user", USER_PROMPT),
-                ]
-            )
+        self.prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", SYSTEM_PROMPT),
+                ("user", USER_PROMPT),
+            ]
+        )
 
-            self.chain = self.prompt | self.llm | StrOutputParser()
-        else:
-            self.llm = None
-            self.chain = None
+        self.chain = self.prompt | self.llm | StrOutputParser()
 
     @staticmethod
     def _strip_code_fences(text: str) -> str:
@@ -72,28 +70,7 @@ class SQLAgent:
             return match.group(1)
         return text
 
-    def _mock_sql(self, question: str, schema: Dict[str, Any]) -> str:
-        """Fallback deterministic SQL generator for offline/testing."""
-        tables = schema.get("tables") or {}
-        table_name = next(iter(tables), "results")
-        columns = tables.get(table_name, {})
-
-        question_lower = question.lower()
-        where_clause = ""
-
-        match = re.search(r"(?:older|greater) than (\d+)", question_lower)
-        if match and "age" in {c.lower() for c in columns}:
-            where_clause = f"WHERE age > {match.group(1)}"
-
-        sql = f"SELECT * FROM {table_name}"
-        if where_clause:
-            sql += f" {where_clause}"
-        return f"{sql};"
-
     def run(self, question: str, schema: dict) -> str:
-        if self.use_mock:
-            return self._mock_sql(question, schema)
-
         raw_sql = self.chain.invoke(
             {
                 "question": question,
