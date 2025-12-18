@@ -1,6 +1,9 @@
 from sqlalchemy import text
 
+from langchain_core.runnables import RunnableLambda
+
 from agentic_sql.agents.coordinator import CoordinatorAgent
+from agentic_sql.agents.sql_agent import SQLAgent
 
 
 TEST_DB_URL = "sqlite:///./test.db"
@@ -31,7 +34,8 @@ def test_coordinator_end_to_end():
             )
         )
 
-    coordinator = CoordinatorAgent(database_url=TEST_DB_URL)
+    sql_agent_stub = SQLAgent(llm=RunnableLambda(lambda _: 'SELECT country, SUM(amount) AS total_sales FROM sales GROUP BY country;'))
+    coordinator = CoordinatorAgent(database_url=TEST_DB_URL, sql_agent=sql_agent_stub)
 
     output = coordinator.run(
         question="Show total sales per country"
