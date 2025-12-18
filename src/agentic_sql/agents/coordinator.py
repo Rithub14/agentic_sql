@@ -37,10 +37,6 @@ class CoordinatorAgent:
 
         self.graph = self._build_graph()
 
-    # -------------------------
-    # Graph nodes
-    # -------------------------
-
     def _get_schema(self, state: AgentState) -> AgentState:
         state["schema"] = self.schema_agent.run()
         return state
@@ -67,10 +63,6 @@ class CoordinatorAgent:
         )
         return state
 
-    # -------------------------
-    # Graph construction
-    # -------------------------
-
     def _build_graph(self):
         graph = StateGraph(AgentState)
 
@@ -89,10 +81,6 @@ class CoordinatorAgent:
         graph.add_edge("visualize", END)
 
         return graph.compile()
-
-    # -------------------------
-    # Public API
-    # -------------------------
 
     def run(
         self,

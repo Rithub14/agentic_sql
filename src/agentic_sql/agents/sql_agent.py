@@ -81,7 +81,6 @@ class SQLAgent:
         question_lower = question.lower()
         where_clause = ""
 
-        # Simple heuristic for "older/greater than N"
         match = re.search(r"(?:older|greater) than (\d+)", question_lower)
         if match and "age" in {c.lower() for c in columns}:
             where_clause = f"WHERE age > {match.group(1)}"

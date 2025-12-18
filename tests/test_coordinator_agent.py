@@ -7,7 +7,6 @@ TEST_DB_URL = "sqlite:///./test.db"
 
 
 def test_coordinator_end_to_end():
-    # Prepare test DB
     from agentic_sql.db.engine import get_engine
 
     engine = get_engine(TEST_DB_URL)

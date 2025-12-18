@@ -15,10 +15,6 @@ st.set_page_config(page_title="Agentic SQL Explorer", layout="wide")
 st.title("🧠 Agentic SQL Explorer")
 st.caption("Natural Language → SQL → Results → Visualization (Multi-Agent)")
 
-# -----------------------
-# Helpers
-# -----------------------
-
 
 def assemble_url(db_type: str, host: str, port: str, user: str, password: str, database: str) -> str:
     if db_type == "sqlite":
@@ -30,20 +26,11 @@ def assemble_url(db_type: str, host: str, port: str, user: str, password: str, d
     port_part = f":{port}" if port else ""
     return f"{db_type}://{auth}{host}{port_part}/{database}"
 
-
-# -----------------------
-# Session State Init
-# -----------------------
-
 if "api_response" not in st.session_state:
     st.session_state.api_response = None
 
 if "force_render_chart" not in st.session_state:
     st.session_state.force_render_chart = False
-
-# -----------------------
-# User Input (structured DB form)
-# -----------------------
 
 question = st.text_input(
     "Ask a question about your database",
@@ -87,10 +74,6 @@ chart_type = st.selectbox(
 test_clicked = st.button("Test connection", key="test_connection")
 submit = st.button("Run Query", key="run_query", disabled=not question or not db_url)
 
-# -----------------------
-# API Call (ONLY HERE)
-# -----------------------
-
 if test_clicked and db_url:
     with st.spinner("Testing connection..."):
         resp = requests.post(API_TEST_URL, json={"database_url": db_url})
@@ -114,16 +97,11 @@ if submit:
         st.session_state.api_response = None
     else:
         st.session_state.api_response = response.json()
-        st.session_state.force_render_chart = False  # reset
-
-# -----------------------
-# Render Results (ALWAYS)
-# -----------------------
+        st.session_state.force_render_chart = False
 
 if st.session_state.api_response:
     data = st.session_state.api_response
 
-    # SQL
     st.subheader("Generated SQL")
     st.code(data["sql"], language="sql")
 
@@ -136,10 +114,6 @@ if st.session_state.api_response:
         st.dataframe(df, use_container_width=True)
 
         viz = data["visualization"]
-
-        # -----------------------
-        # Visualization
-        # -----------------------
 
         should_render = viz.get("render") or st.session_state.force_render_chart
 

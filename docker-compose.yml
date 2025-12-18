@@ -7,7 +7,6 @@ services:
       target: api
     env_file: .env
     environment:
-      # Fallback if not set in .env
       - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@db:5432/postgres}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     depends_on:
