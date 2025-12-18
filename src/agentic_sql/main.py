@@ -1,7 +1,4 @@
-# src/agentic_sql/main.py
-
 from fastapi import FastAPI
-
 from agentic_sql.api.routes import router as query_router
 
 app = FastAPI(
