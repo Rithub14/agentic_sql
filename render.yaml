@@ -1,0 +1,41 @@
+databases:
+  - name: agentic-sql-db
+    plan: free
+    databaseName: agenticsql
+    user: agenticsql
+
+services:
+  # ---------------------------------------------------------------------------
+  # FastAPI backend
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: agentic-sql-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: uvicorn agentic_sql.main:app --host 0.0.0.0 --port 8000 --workers 1
+    plan: free
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false           # You enter this manually in Render dashboard
+      - key: DATABASE_URL
+        fromDatabase:
+          name: agentic-sql-db
+          property: connectionString
+
+  # ---------------------------------------------------------------------------
+  # Streamlit frontend
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: agentic-sql-frontend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: streamlit run frontend/app.py --server.port=10000 --server.address=0.0.0.0 --server.headless=true
+    plan: free
+    envVars:
+      - key: API_BASE_URL
+        fromService:
+          name: agentic-sql-api
+          type: web
+          property: host
