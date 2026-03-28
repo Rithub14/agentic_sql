@@ -12,6 +12,8 @@ wheels/
 # Test artifacts
 .pytest_cache/
 *.db
+*.sqlite
+*.sqlite3
 
 # Secrets
 .env 
