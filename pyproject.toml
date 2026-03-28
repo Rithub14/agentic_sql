@@ -1,7 +1,7 @@
 [project]
 name = "agentic-sql"
-version = "0.1.0"
-description = "Add your description here"
+version = "1.0.0"
+description = "Natural-language-to-SQL multi-agent system powered by LangGraph and GPT-4o-mini"
 readme = "README.md"
 authors = [
     { name = "Rizwan Aslam", email = "letsmailriz@gmail.com" }
@@ -20,16 +20,16 @@ dependencies = [
     "psycopg2-binary>=2.9.11",
     "pydantic>=2.12.5",
     "pymysql>=1.1.2",
-    "pytest>=9.0.2",
     "python-dotenv>=1.2.1",
     "requests>=2.32.5",
+    "slowapi>=0.1.9",
     "sqlalchemy>=2.0.45",
     "streamlit>=1.52.1",
     "uvicorn[standard]>=0.38.0",
 ]
 
 [project.scripts]
-agentic-sql = "agentic_sql:main"
+agentic-sql = "agentic_sql.main:app"
 
 [build-system]
 requires = ["uv_build>=0.9.11,<0.10.0"]
@@ -46,3 +46,9 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
