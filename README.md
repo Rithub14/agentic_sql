@@ -1,70 +1,107 @@
-Agentic SQL Explorer
-====================
+# Agentic SQL Explorer
 
-Natural‑language to SQL with optional visualization. FastAPI backend orchestrates schema inspection, SQL generation/validation, execution, and viz suggestion; Streamlit frontend lets non‑technical users connect a database, ask questions, test connectivity, and view results.
+Ask questions about your database in plain English and get SQL, results, and charts back — no SQL knowledge needed.
 
-## Key features
-- Structured DB connection form (Postgres/MySQL/SQLite), no raw URLs required; built‑in “Test connection”.
-- Requires OpenAI for SQL generation; set `OPENAI_API_KEY`.
-- LangGraph‑based coordinator: schema agent → SQL agent → validation → execution → visualization agent.
-- Docker Compose for one‑shot startup (API + frontend + Postgres).
+**Live demo:** https://agentic-sql-frontend.onrender.com (NBA dataset pre-loaded)
 
-## Quick start (Docker)
-1) Copy env and adjust as needed:
-   ```bash
-   cp .env.template .env
-   ```
-   Set `OPENAI_API_KEY` if you want real LLM SQL generation.
-2) If host port 5432 is taken, change the Postgres port mapping in `docker-compose.yml` or stop the host Postgres.
-3) Build/run:
-   ```bash
-   docker compose up --build
-   ```
-4) Seed sample tables in the container DB (optional demo):
-   ```bash
-   docker compose exec db psql -U postgres -d postgres -c "
-   CREATE TABLE IF NOT EXISTS artists (id SERIAL PRIMARY KEY, name TEXT);
-   CREATE TABLE IF NOT EXISTS albums (id SERIAL PRIMARY KEY, artist_id INT REFERENCES artists(id), title TEXT);
-   INSERT INTO artists (name) VALUES ('Artist A'), ('Artist B') ON CONFLICT DO NOTHING;
-   INSERT INTO albums (artist_id, title) VALUES (1,'Album One'),(1,'Album Two'),(2,'Album Three') ON CONFLICT DO NOTHING;
-   "
-   ```
-5) Open the UI at http://localhost:8501. Use:
-   - DB type: `postgresql`
-   - Host: `db`
-   - Port: `5432`
-   - Username/Password: from `.env` (defaults `postgres`/`postgres`)
-   - Database: `postgres`
-   - Question example: “List all album titles and their artist names.”
+---
 
-## Local (without Docker)
-1) Create a venv and install deps (uv preferred):
-   ```bash
-   uv sync
-   # or: pip install -e .
-   ```
-2) Copy env: `cp .env.template .env` and set `DATABASE_URL` and optionally `OPENAI_API_KEY`.
-3) Run backend:
-   ```bash
-   uvicorn agentic_sql.main:app --reload --app-dir src
-   ```
-4) Run frontend:
-   ```bash
-   streamlit run frontend/app.py
-   ```
-5) Open http://localhost:8501 and fill the form with your DB credentials/host. Use “Test connection” before running queries.
+## What it does
 
-## Environment
-- `.env.template` documents required vars: `DATABASE_URL`, `API_BASE_URL`, `OPENAI_API_KEY`, and Postgres container creds. Copy to `.env` and fill real values.
+Type a question like *"Which teams had the best winning percentage last season?"* and the app:
 
-## Testing
+1. Inspects your database schema
+2. Generates a SQL query via GPT-4o-mini
+3. Validates it (blocks any destructive statements)
+4. Executes it and returns results
+5. Suggests or renders the best chart for the data
+6. Explains what the query does in plain English
+
+Supports follow-up questions with conversation context — ask *"now filter that by the Western Conference"* and it remembers the previous query.
+
+---
+
+## Stack
+
+- **FastAPI** — backend API
+- **LangGraph** — multi-agent pipeline orchestration
+- **OpenAI GPT-4o-mini** — SQL generation and explanation
+- **SQLAlchemy** — database connectivity (Postgres, MySQL, SQLite)
+- **Streamlit** — frontend UI
+- **Plotly** — charts
+
+---
+
+## Features
+
+- Connect any Postgres, MySQL, or SQLite database
+- Schema Explorer — see all tables and columns, get AI-suggested questions
+- Click a suggested question to run it instantly
+- Export results as CSV, Excel, or JSON
+- Query history in the sidebar
+- Rate limiting, structured JSON logging, request ID tracing
+
+---
+
+## Running locally
+
+**With Docker (easiest):**
+
 ```bash
-pytest
+cp .env.template .env
+# Add your OPENAI_API_KEY to .env
+docker compose up --build
 ```
 
-## Project structure
-- `src/agentic_sql`: FastAPI app and agents (schema, SQL, validation, execution, visualization).
-- `frontend/`: Streamlit UI.
-- `docker-compose.yml`: API + frontend + Postgres.
-- `.env.template`: sample configuration.
+Open http://localhost:8501.
 
+**Without Docker:**
+
+```bash
+uv sync
+cp .env.template .env
+# Terminal 1
+make api
+# Terminal 2
+make frontend
+```
+
+Open http://localhost:8501, fill in your DB credentials, and start asking questions.
+
+---
+
+## Environment variables
+
+| Variable | Description |
+|---|---|
+| `OPENAI_API_KEY` | Required for SQL generation |
+| `DATABASE_URL` | Default DB for the backend |
+| `API_BASE_URL` | Frontend → backend URL |
+| `DEMO_DATABASE_URL` | Enables the "Use Demo DB" button |
+
+Copy `.env.template` to `.env` and fill in the values.
+
+---
+
+## Testing
+
+```bash
+make test
+```
+
+39 tests, all using in-memory SQLite — no API key or live DB needed.
+
+---
+
+## Project structure
+
+```
+src/agentic_sql/
+  agents/          # LangGraph pipeline nodes
+  api/             # FastAPI routes
+  db/              # Engine, schema inspection, ERD generation
+  execution/       # SQL executor
+frontend/          # Streamlit UI
+scripts/           # DB seed scripts
+tests/             # pytest suite
+```
