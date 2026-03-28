@@ -152,14 +152,18 @@ if "question_input" not in st.session_state:
 # Sidebar
 # ---------------------------------------------------------------------------
 
+_PAGES = ["Query", "Schema Explorer"]
+
 with st.sidebar:
     st.header("Navigation")
     page = st.radio(
         "Page",
-        options=["Query", "Schema Explorer"],
-        key="current_page",
+        options=_PAGES,
+        index=_PAGES.index(st.session_state.current_page),
         label_visibility="collapsed",
     )
+    # Sync selection back — plain state var, not widget-bound
+    st.session_state.current_page = page
 
     st.divider()
     st.header("Database Connection")
