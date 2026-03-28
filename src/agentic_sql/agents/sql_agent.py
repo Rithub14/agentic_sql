@@ -6,22 +6,24 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_openai import ChatOpenAI
 
+from agentic_sql.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 SYSTEM_PROMPT = """
 You are a senior data engineer.
 
-Convert the user’s natural language question into a single valid SQL statement
+Convert the user's natural language question into a single valid SQL SELECT statement
 that will run on the given database.
 
-Use the exact table and column names from the schema. 
-For PostgreSQL in particular, quote identifiers exactly as they appear:
-e.g., "TableName"."ColumnName".
-
-Do NOT:
-- Use DELETE, UPDATE, DROP, ALTER, INSERT
-- Use unrecognized tables/columns
-- Return anything other than the SQL query itself
-No explanations, no markdown.
+Rules:
+- Use the exact table and column names from the schema.
+- For PostgreSQL, quote identifiers exactly as they appear: e.g., "TableName"."ColumnName".
+- Return ONLY the SQL query — no explanation, no markdown, no code fences.
+- Never use DELETE, UPDATE, DROP, ALTER, INSERT, TRUNCATE, or CREATE.
+- Never reference tables or columns that are not in the schema.
+- If a JOIN is needed, infer it from foreign key annotations in the schema (FK->table.column).
 """
 
 USER_PROMPT = """
@@ -35,7 +37,7 @@ Question:
 
 class SQLAgent:
     """
-    LLM-powered agent that converts natural language into safe SQL.
+    LLM-powered agent that converts natural language into a safe SQL SELECT statement.
     """
 
     def __init__(
@@ -46,7 +48,7 @@ class SQLAgent:
     ):
         api_key_present = bool(os.getenv("OPENAI_API_KEY"))
         if llm is None and not api_key_present:
-            raise ValueError("OPENAI_API_KEY is required for SQL generation.")
+            raise ValueError("OPENAI_API_KEY environment variable is required for SQL generation.")
 
         self.llm = llm or ChatOpenAI(model=model, temperature=temperature)
 
@@ -61,21 +63,21 @@ class SQLAgent:
 
     @staticmethod
     def _strip_code_fences(text: str) -> str:
-        """
-        Remove Markdown code fences so downstream validators/executors
-        receive plain SQL.
-        """
+        """Remove Markdown code fences so downstream validators receive plain SQL."""
         match = re.search(r"```(?:sql)?\s*(.*?)\s*```", text, re.DOTALL | re.IGNORECASE)
         if match:
             return match.group(1)
         return text
 
-    def run(self, question: str, schema: dict) -> str:
-        raw_sql = self.chain.invoke(
-            {
-                "question": question,
-                "schema": schema,
-            }
-        )
-        sql = self._strip_code_fences(raw_sql)
-        return sql.strip()
+    def run(self, question: str, schema: Dict[str, Any]) -> str:
+        logger.info("generating SQL", extra={"question_preview": question[:120]})
+
+        try:
+            raw_sql = self.chain.invoke({"question": question, "schema": schema})
+        except Exception:
+            logger.exception("LLM call failed during SQL generation")
+            raise
+
+        sql = self._strip_code_fences(raw_sql).strip()
+        logger.info("SQL generated", extra={"sql_preview": sql[:120]})
+        return sql
