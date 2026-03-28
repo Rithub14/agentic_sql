@@ -168,6 +168,14 @@ with st.sidebar:
     st.divider()
     st.header("Database Connection")
 
+    # Demo DB shortcut — populated from DEMO_DATABASE_URL env var
+    _demo_url = os.getenv("DEMO_DATABASE_URL", "")
+    if _demo_url:
+        if st.button("Use Demo DB (NBA)", use_container_width=True):
+            st.session_state["_demo_url_active"] = True
+        if st.session_state.get("_demo_url_active"):
+            st.success("Demo DB active — scroll down to connect.")
+
     db_type = st.selectbox(
         "Database type",
         options=["postgresql", "mysql", "sqlite"],
@@ -218,7 +226,11 @@ with st.sidebar:
             key="db_name",
         )
 
-    db_url = assemble_url(db_type, host, port, username, password, database)
+    # Use demo DB URL if active, otherwise assemble from form fields
+    if st.session_state.get("_demo_url_active") and _demo_url:
+        db_url = _demo_url
+    else:
+        db_url = assemble_url(db_type, host, port, username, password, database)
 
     test_clicked = st.button("Test Connection", key="test_connection", use_container_width=True)
 
