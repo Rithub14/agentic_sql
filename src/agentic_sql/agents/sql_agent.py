@@ -1,6 +1,6 @@
 import os
 import re
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -29,7 +29,7 @@ Rules:
 USER_PROMPT = """
 Database schema:
 {schema}
-
+{history_block}
 Question:
 {question}
 """
@@ -69,11 +69,34 @@ class SQLAgent:
             return match.group(1)
         return text
 
-    def run(self, question: str, schema: Dict[str, Any]) -> str:
+    @staticmethod
+    def _format_history(conversation_history: List[Dict[str, str]]) -> str:
+        """Format prior Q&A turns into a context block for the prompt."""
+        if not conversation_history:
+            return ""
+        lines = ["\nConversation history (for follow-up context):"]
+        for i, turn in enumerate(conversation_history[-5:], 1):
+            lines.append(f"{i}. Q: {turn.get('question', '')}")
+            lines.append(f"   SQL: {turn.get('sql', '')}")
+        lines.append("")
+        return "\n".join(lines)
+
+    def run(
+        self,
+        question: str,
+        schema: Dict[str, Any],
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+    ) -> str:
         logger.info("generating SQL", extra={"question_preview": question[:120]})
 
+        history_block = self._format_history(conversation_history or [])
+
         try:
-            raw_sql = self.chain.invoke({"question": question, "schema": schema})
+            raw_sql = self.chain.invoke({
+                "question": question,
+                "schema": schema,
+                "history_block": history_block,
+            })
         except Exception:
             logger.exception("LLM call failed during SQL generation")
             raise

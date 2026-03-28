@@ -9,12 +9,15 @@ class TestCoordinatorAgent:
         sql_stub = SQLAgent(
             llm=RunnableLambda(lambda _: stub_sql)
         )
-        # Pass the engine directly so the coordinator reuses the same
-        # in-memory SQLite connection (new engine = new empty DB)
-        return CoordinatorAgent(
+        coordinator = CoordinatorAgent(
             engine=engine_with_sales,
             sql_agent=sql_stub,
         )
+        # Stub out explanation agent to avoid requiring OPENAI_API_KEY in tests
+        from unittest.mock import MagicMock
+        coordinator.explanation_agent = MagicMock()
+        coordinator.explanation_agent.run = MagicMock(return_value="This query groups sales by country.")
+        return coordinator
 
     def test_end_to_end_returns_expected_keys(self, engine_with_sales):
         coordinator = self._make_coordinator(
@@ -26,6 +29,7 @@ class TestCoordinatorAgent:
         assert "results" in output
         assert "sql" in output
         assert "visualization" in output
+        assert "explanation" in output
 
     def test_results_are_non_empty(self, engine_with_sales):
         coordinator = self._make_coordinator(

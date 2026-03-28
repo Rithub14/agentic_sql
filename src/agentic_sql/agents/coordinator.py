@@ -3,6 +3,7 @@ from typing import TypedDict, Dict, Any, Optional
 
 from langgraph.graph import StateGraph, END
 
+from agentic_sql.agents.explanation_agent import ExplanationAgent
 from agentic_sql.agents.schema_agent import SchemaAgent
 from agentic_sql.agents.sql_agent import SQLAgent
 from agentic_sql.agents.validation_agent import ValidationAgent, SQLValidationError
@@ -21,13 +22,19 @@ class AgentState(TypedDict):
     validated_sql: str
     results: list[Dict[str, Any]]
     visualization: Dict[str, Any]
+    explanation: str
     user_requested_chart: Optional[str]
+    conversation_history: list[Dict[str, str]]
 
 
 class CoordinatorAgent:
     """
     LangGraph-based coordinator that orchestrates the full NL→SQL pipeline.
     A NEW instance is created per request so each request gets its own DB connection.
+
+    Pipeline:
+        SchemaAgent → SQLAgent → ValidationAgent → SQLExecutor
+                    → ExplanationAgent → VisualizationAgent
     """
 
     def __init__(
@@ -42,6 +49,7 @@ class CoordinatorAgent:
         self.sql_agent = sql_agent or SQLAgent()
         self.validation_agent = ValidationAgent()
         self.executor = SQLExecutor(engine)
+        self.explanation_agent = ExplanationAgent()
         self.visualization_agent = VisualizationAgent()
 
         self.graph = self._build_graph()
@@ -61,6 +69,7 @@ class CoordinatorAgent:
         state["sql"] = self.sql_agent.run(
             question=state["question"],
             schema=state["schema"],
+            conversation_history=state.get("conversation_history", []),
         )
         logger.info(
             "sql_agent completed",
@@ -83,6 +92,12 @@ class CoordinatorAgent:
         )
         return state
 
+    def _explain(self, state: AgentState) -> AgentState:
+        t0 = time.perf_counter()
+        state["explanation"] = self.explanation_agent.run(sql=state["validated_sql"])
+        logger.info("explanation_agent completed", extra={"duration_ms": round((time.perf_counter() - t0) * 1000)})
+        return state
+
     def _visualize(self, state: AgentState) -> AgentState:
         t0 = time.perf_counter()
         state["visualization"] = self.visualization_agent.run(
@@ -99,13 +114,15 @@ class CoordinatorAgent:
         graph.add_node("sql", self._generate_sql)
         graph.add_node("validate", self._validate_sql)
         graph.add_node("execute", self._execute_sql)
+        graph.add_node("explain", self._explain)
         graph.add_node("visualize", self._visualize)
 
         graph.set_entry_point("schema")
         graph.add_edge("schema", "sql")
         graph.add_edge("sql", "validate")
         graph.add_edge("validate", "execute")
-        graph.add_edge("execute", "visualize")
+        graph.add_edge("execute", "explain")
+        graph.add_edge("explain", "visualize")
         graph.add_edge("visualize", END)
 
         return graph.compile()
@@ -118,6 +135,7 @@ class CoordinatorAgent:
         self,
         question: str,
         user_requested_chart: Optional[str] = None,
+        conversation_history: Optional[list] = None,
     ) -> Dict[str, Any]:
         pipeline_start = time.perf_counter()
         logger.info("pipeline started", extra={"question_preview": question[:120]})
@@ -129,13 +147,14 @@ class CoordinatorAgent:
             "validated_sql": "",
             "results": [],
             "visualization": {},
+            "explanation": "",
             "user_requested_chart": user_requested_chart,
+            "conversation_history": conversation_history or [],
         }
 
         try:
             final_state = self.graph.invoke(initial_state)
         except SQLValidationError:
-            # Re-raise so callers can return a 422 instead of 500
             raise
         except Exception:
             logger.exception("pipeline failed")
@@ -148,4 +167,5 @@ class CoordinatorAgent:
             "sql": final_state["validated_sql"],
             "results": final_state["results"],
             "visualization": final_state["visualization"],
+            "explanation": final_state.get("explanation", ""),
         }
