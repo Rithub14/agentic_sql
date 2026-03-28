@@ -1,32 +1,24 @@
-from sqlalchemy import text
-
-from agentic_sql.db.engine import get_engine
 from agentic_sql.agents.schema_agent import SchemaAgent
 
-TEST_DB_URL = "sqlite:///./test.db"
 
+class TestSchemaAgent:
+    def test_returns_tables_key(self, engine_with_products):
+        schema = SchemaAgent(engine_with_products).run()
+        assert "tables" in schema
 
-def test_schema_agent():
-    engine = get_engine(TEST_DB_URL)
+    def test_detects_all_columns(self, engine_with_products):
+        tables = SchemaAgent(engine_with_products).run()["tables"]
+        assert "products" in tables
+        assert "id" in tables["products"]
+        assert "name" in tables["products"]
+        assert "price" in tables["products"]
 
-    with engine.begin() as conn:
-        conn.execute(
-            text(
-                """
-                CREATE TABLE IF NOT EXISTS products (
-                    id INTEGER PRIMARY KEY,
-                    name TEXT,
-                    price INTEGER
-                )
-                """
-            )
-        )
+    def test_pk_annotation_present(self, engine_with_products):
+        """Primary key columns must be annotated with 'PK' for LLM context."""
+        tables = SchemaAgent(engine_with_products).run()["tables"]
+        assert "PK" in tables["products"]["id"]
 
-    agent = SchemaAgent(engine)
-    schema = agent.run()
-
-    assert "tables" in schema
-    assert "products" in schema["tables"]
-    assert "id" in schema["tables"]["products"]
-    assert "name" in schema["tables"]["products"]
-    assert "price" in schema["tables"]["products"]
+    def test_empty_database(self, engine):
+        """An engine with no tables should return an empty tables dict."""
+        schema = SchemaAgent(engine).run()
+        assert schema == {"tables": {}}
