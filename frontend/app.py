@@ -8,7 +8,6 @@ import pandas as pd
 import plotly.express as px
 import requests
 import streamlit as st
-import streamlit.components.v1 as components
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
 API_QUERY_URL = f"{API_BASE_URL}/api/query"
@@ -92,40 +91,44 @@ def _render_chart(df: pd.DataFrame, spec: dict) -> None:
     st.plotly_chart(fig, use_container_width=True)
 
 
-def _render_mermaid(mermaid_str: str, n_tables: int) -> None:
-    """Render a Mermaid ERD diagram in an iframe using the Mermaid CDN."""
-    height = max(350, n_tables * 160 + 100)
-    # Escape backticks in mermaid content to avoid breaking the JS template literal
-    safe_mermaid = mermaid_str.replace("`", "\\`")
-    html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
-        <style>
-            body {{ background: #ffffff; margin: 0; padding: 12px; font-family: sans-serif; }}
-            .mermaid {{ text-align: center; }}
-        </style>
-    </head>
-    <body>
-        <div class="mermaid">{mermaid_str}</div>
-        <script>
-            mermaid.initialize({{
-                startOnLoad: true,
-                theme: "default",
-                er: {{ diagramPadding: 20, layoutDirection: "TB" }}
-            }});
-        </script>
-    </body>
-    </html>
-    """
-    components.html(html, height=height, scrolling=True)
-
-
 def _export_excel(df: pd.DataFrame) -> bytes:
     buf = io.BytesIO()
     df.to_excel(buf, index=False, engine="openpyxl")
     return buf.getvalue()
+
+
+def _run_query(question: str, db_url: str, chart_type: str) -> dict | None:
+    """Execute the query pipeline and return the response dict, or None on error."""
+    history_payload = [
+        {"question": t["question"], "sql": t["sql"]}
+        for t in st.session_state.conversation_history[-5:]
+    ]
+    payload = {
+        "question": question,
+        "chart": None if chart_type == "None" else chart_type,
+        "database_url": db_url,
+        "conversation_history": history_payload,
+    }
+    try:
+        response = requests.post(API_QUERY_URL, json=payload, timeout=REQUEST_TIMEOUT)
+    except requests.exceptions.Timeout:
+        st.error("Query timed out. Try a simpler question or check your database.")
+        return None
+    except requests.exceptions.ConnectionError:
+        st.error("Could not reach the API server. Is it running?")
+        return None
+
+    if response.status_code == 422:
+        st.error(f"Query blocked: {response.json().get('detail', 'Invalid SQL')}")
+        return None
+    elif response.status_code != 200:
+        detail = ""
+        if response.headers.get("content-type", "").startswith("application/json"):
+            detail = response.json().get("detail", "")
+        st.error(f"Backend error. {detail}")
+        return None
+
+    return response.json()
 
 
 # ---------------------------------------------------------------------------
@@ -138,16 +141,27 @@ st.session_state.setdefault("query_history", [])
 st.session_state.setdefault("conversation_history", [])
 st.session_state.setdefault("schema_data", None)
 st.session_state.setdefault("suggestions", [])
+st.session_state.setdefault("current_page", "Query")
+st.session_state.setdefault("auto_run_question", None)
 
 if "question_input" not in st.session_state:
     st.session_state.question_input = ""
 
 
 # ---------------------------------------------------------------------------
-# Sidebar — DB connection + chart + history
+# Sidebar
 # ---------------------------------------------------------------------------
 
 with st.sidebar:
+    st.header("Navigation")
+    page = st.radio(
+        "Page",
+        options=["Query", "Schema Explorer"],
+        key="current_page",
+        label_visibility="collapsed",
+    )
+
+    st.divider()
     st.header("Database Connection")
 
     db_type = st.selectbox(
@@ -228,7 +242,6 @@ with st.sidebar:
         key="chart_type",
     )
 
-    # Query history
     if st.session_state.query_history:
         st.divider()
         st.subheader("Query History")
@@ -239,20 +252,24 @@ with st.sidebar:
 
 
 # ---------------------------------------------------------------------------
-# Main area — title + tabs
+# Title
 # ---------------------------------------------------------------------------
 
 st.title("Agentic SQL Explorer")
 st.caption("Natural Language → SQL → Results → Visualization (Multi-Agent)")
 
-tab_query, tab_schema = st.tabs(["Query", "Schema Explorer"])
-
 
 # ===========================================================================
-# Tab 1: Query
+# Page: Query
 # ===========================================================================
 
-with tab_query:
+if st.session_state.current_page == "Query":
+
+    # If a suggestion was clicked in Schema Explorer, inject it and auto-run
+    auto_question = st.session_state.pop("auto_run_question", None)
+    if auto_question:
+        st.session_state.question_input = auto_question
+
     question = st.text_input(
         "Ask a question about your database",
         placeholder="e.g. Show total sales per country",
@@ -274,69 +291,37 @@ with tab_query:
                 st.session_state.conversation_history = []
                 st.rerun()
 
-    # Conversation context expander
     if st.session_state.conversation_history:
         with st.expander(
             f"Conversation context — {len(st.session_state.conversation_history)} prior turn(s)",
             expanded=False,
         ):
-            st.caption("These previous Q&A pairs are sent with your next question for follow-up support.")
+            st.caption("Previous Q&A pairs sent with your next question for follow-up support.")
             for i, turn in enumerate(st.session_state.conversation_history, 1):
                 st.markdown(f"**Turn {i}:** {turn['question']}")
                 st.code(turn["sql"], language="sql")
 
-    # Run query
-    if submit:
-        history_payload = [
-            {"question": t["question"], "sql": t["sql"]}
-            for t in st.session_state.conversation_history[-5:]
-        ]
-        payload = {
-            "question": question,
-            "chart": None if chart_type == "None" else chart_type,
-            "database_url": db_url,
-            "conversation_history": history_payload,
-        }
+    # Auto-run when redirected from Schema Explorer
+    should_run = submit or bool(auto_question and question and db_url)
 
+    if should_run and question and db_url:
         with st.spinner("Running agentic pipeline..."):
-            try:
-                response = requests.post(API_QUERY_URL, json=payload, timeout=REQUEST_TIMEOUT)
-            except requests.exceptions.Timeout:
-                st.error("Query timed out. Try a simpler question or check your database.")
-                response = None
-            except requests.exceptions.ConnectionError:
-                st.error("Could not reach the API server. Is it running?")
-                response = None
+            data = _run_query(question, db_url, chart_type)
 
-        if response is not None:
-            if response.status_code == 422:
-                st.error(f"Query blocked: {response.json().get('detail', 'Invalid SQL')}")
-                st.session_state.api_response = None
-            elif response.status_code != 200:
-                detail = ""
-                if response.headers.get("content-type", "").startswith("application/json"):
-                    detail = response.json().get("detail", "")
-                st.error(f"Backend error. {detail}")
-                st.session_state.api_response = None
-            else:
-                data = response.json()
-                st.session_state.api_response = data
-                st.session_state.force_render_chart = False
-
-                # Update conversation history
-                st.session_state.conversation_history.append({
-                    "question": question,
-                    "sql": data.get("sql", ""),
-                })
-                st.session_state.conversation_history = st.session_state.conversation_history[-10:]
-
-                # Update query history (sidebar)
-                st.session_state.query_history.insert(0, {
-                    "question": question,
-                    "sql": data.get("sql", ""),
-                    "row_count": len(data.get("results", [])),
-                })
-                st.session_state.query_history = st.session_state.query_history[:10]
+        if data:
+            st.session_state.api_response = data
+            st.session_state.force_render_chart = False
+            st.session_state.conversation_history.append({
+                "question": question,
+                "sql": data.get("sql", ""),
+            })
+            st.session_state.conversation_history = st.session_state.conversation_history[-10:]
+            st.session_state.query_history.insert(0, {
+                "question": question,
+                "sql": data.get("sql", ""),
+                "row_count": len(data.get("results", [])),
+            })
+            st.session_state.query_history = st.session_state.query_history[:10]
 
     # Display results
     if st.session_state.api_response:
@@ -345,7 +330,6 @@ with tab_query:
         st.subheader("Generated SQL")
         st.code(data["sql"], language="sql")
 
-        # Plain-English explanation
         if data.get("explanation"):
             st.info(f"**What this query does:** {data['explanation']}")
 
@@ -357,7 +341,6 @@ with tab_query:
             st.subheader(f"Query Results ({len(df):,} rows)")
             st.dataframe(df, use_container_width=True)
 
-            # Export buttons
             col_csv, col_excel, col_json = st.columns(3)
             with col_csv:
                 st.download_button(
@@ -384,7 +367,6 @@ with tab_query:
                     use_container_width=True,
                 )
 
-            # Visualization
             viz = data.get("visualization", {})
             spec = viz.get("spec") or {}
             should_render = viz.get("render") or st.session_state.force_render_chart
@@ -392,36 +374,33 @@ with tab_query:
             if should_render and spec:
                 st.subheader("Visualization")
                 _render_chart(df, spec)
-
             elif viz.get("suggest") and spec:
                 st.info(viz["message"])
                 if st.button(f"Generate {viz['chart'].replace('_', ' ')} chart"):
                     st.session_state.force_render_chart = True
                     st.rerun()
-
         else:
             st.warning("No results returned.")
 
 
 # ===========================================================================
-# Tab 2: Schema Explorer
+# Page: Schema Explorer
 # ===========================================================================
 
-with tab_schema:
-    st.markdown("Connect to a database using the sidebar, then explore its structure and get suggested questions.")
+elif st.session_state.current_page == "Schema Explorer":
 
-    col_btn, col_reset = st.columns([2, 5])
-    with col_btn:
-        explore_clicked = st.button(
-            "Explore Schema",
-            key="explore_schema",
-            disabled=not db_url,
-            use_container_width=True,
-            type="primary",
-        )
+    st.markdown("Inspect your database tables and get suggested questions to get started quickly.")
+
+    explore_clicked = st.button(
+        "Explore Schema",
+        key="explore_schema",
+        disabled=not db_url,
+        type="primary",
+    )
 
     if explore_clicked and db_url:
-        with st.spinner("Analyzing schema..."):
+        with st.spinner("Analyzing schema and generating suggestions..."):
+            # Fetch schema
             try:
                 schema_resp = requests.post(
                     API_SCHEMA_URL, json={"database_url": db_url}, timeout=REQUEST_TIMEOUT
@@ -435,43 +414,44 @@ with tab_schema:
                 st.error("Could not reach the API server.")
                 st.session_state.schema_data = None
 
-        if st.session_state.schema_data:
-            with st.spinner("Generating question suggestions..."):
+            # Fetch suggestions in same spinner
+            if st.session_state.schema_data:
                 try:
                     sug_resp = requests.post(
                         API_SUGGESTIONS_URL, json={"database_url": db_url}, timeout=REQUEST_TIMEOUT
                     )
-                    if sug_resp.status_code == 200:
-                        st.session_state.suggestions = sug_resp.json().get("suggestions", [])
-                    else:
-                        st.session_state.suggestions = []
+                    st.session_state.suggestions = (
+                        sug_resp.json().get("suggestions", [])
+                        if sug_resp.status_code == 200 else []
+                    )
                 except Exception:
                     st.session_state.suggestions = []
 
-    # ER Diagram
     if st.session_state.schema_data:
         schema_data = st.session_state.schema_data
-        n_tables = len(schema_data.get("tables", {}))
+        tables = schema_data.get("tables", {})
 
-        st.subheader(f"Entity Relationship Diagram ({n_tables} tables)")
-        _render_mermaid(schema_data["mermaid"], n_tables)
+        # --- Suggested questions (shown first, prominent) ---
+        if st.session_state.suggestions:
+            st.subheader("Suggested Questions")
+            st.caption("Click any question to run it instantly.")
+            for suggestion in st.session_state.suggestions:
+                if st.button(f"▶  {suggestion}", key=f"sug_{hash(suggestion)}", use_container_width=True):
+                    st.session_state.auto_run_question = suggestion
+                    st.session_state.current_page = "Query"
+                    st.session_state.api_response = None
+                    st.rerun()
 
-        # Table details in expanders
-        with st.expander("Table details", expanded=False):
-            for table_name, columns in schema_data.get("tables", {}).items():
-                st.markdown(f"**{table_name}**")
+        st.divider()
+
+        # --- Table details ---
+        st.subheader(f"Tables ({len(tables)})")
+        for table_name, columns in tables.items():
+            with st.expander(f"**{table_name}**  — {len(columns)} columns", expanded=False):
                 col_df = pd.DataFrame(
                     [{"column": col, "type": typ} for col, typ in columns.items()]
                 )
                 st.dataframe(col_df, use_container_width=True, hide_index=True)
 
-        # Suggested questions
-        if st.session_state.suggestions:
-            st.subheader("Suggested Questions")
-            st.caption("Click a question to pre-fill it in the Query tab.")
-            for suggestion in st.session_state.suggestions:
-                if st.button(suggestion, key=f"sug_{hash(suggestion)}"):
-                    st.session_state.question_input = suggestion
-                    st.rerun()
     else:
-        st.info("Click **Explore Schema** to inspect the connected database and generate question suggestions.")
+        st.info("Click **Explore Schema** to inspect the connected database.")
