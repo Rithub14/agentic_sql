@@ -424,10 +424,14 @@ elif st.session_state.current_page == "Schema Explorer":
                 if schema_resp.status_code == 200:
                     st.session_state.schema_data = schema_resp.json()
                 else:
-                    st.error(f"Schema fetch failed: {schema_resp.json().get('detail', schema_resp.text)}")
+                    try:
+                        detail = schema_resp.json().get("detail", schema_resp.text)
+                    except Exception:
+                        detail = schema_resp.text or f"HTTP {schema_resp.status_code}"
+                    st.error(f"Schema fetch failed: {detail}")
                     st.session_state.schema_data = None
             except requests.exceptions.ConnectionError:
-                st.error("Could not reach the API server.")
+                st.error("Could not reach the API server. Check that API_BASE_URL is correct.")
                 st.session_state.schema_data = None
 
             # Fetch suggestions in same spinner
